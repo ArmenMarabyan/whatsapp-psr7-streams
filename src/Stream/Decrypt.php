@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Armen\WhatsappPsr7Streams\Stream;
 
 class Decrypt
