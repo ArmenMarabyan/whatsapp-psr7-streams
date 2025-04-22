@@ -4,40 +4,214 @@ declare(strict_types=1);
 
 namespace Armen\WhatsappPsr7Streams\Stream;
 
-class Decrypt
+use Psr\Http\Message\StreamInterface;
+
+final class Decrypt implements StreamInterface
 {
+    /**
+     * @var string
+     */
+    private string $cipherKey;
+    /**
+     * @var string
+     */
+    private string $macKey;
+    /**
+     * @var string
+     */
+    private string $iv;
 
-    public function __construct()
+    /**
+     * @var string
+     */
+    private string $decryptedData;
+    /**
+     * @var int
+     */
+    private int $position = 0;
+
+    /**
+     * @param StreamInterface $stream
+     * @param string $mediaKey
+     * @param string $mediaType
+     */
+    public function __construct(private StreamInterface $stream, string $mediaKey, string $mediaType)
     {
+        $mediaKeyExpanded = Utils::getMediaKeyExpanded('sha256', $mediaKey, 112, $mediaType);
 
+        $this->iv = $mediaKeyExpanded['iv'];
+        $this->cipherKey = $mediaKeyExpanded['cipherKey'];
+        $this->macKey = $mediaKeyExpanded['macKey'];
+
+        $this->decrypt();
     }
 
-    public function decrypt()
+    /**
+     * @return void
+     */
+    private function decrypt(): void
     {
-        $mediaKey = file_get_contents('samples/results/IMAGE.key');
+        $this->stream->rewind();
+        $encrypted = $this->stream->getContents();
 
-        $hkdf = hash_hkdf('sha256', $mediaKey, 112, 'WhatsApp Image Keys');
+        $mac = substr($encrypted, -10);
+        $cipher = substr($encrypted, 0, -10);
 
-        $iv = substr($hkdf, 0, 16);
-        $cipherKey = substr($hkdf, 16, 32);
-        $macKey = substr($hkdf, 48, 32);
-        $refKey = substr($hkdf, 80, 32);
-
-        $fileEnc = file_get_contents('samples/results/IMAGE.enc');
-        $file = substr($fileEnc, 0, -10);
-        $mac = substr($fileEnc, -10);
-
-        $expectedMac = substr(hash_hmac('sha256', $iv . $file, $macKey, true), 0, 10);
-
-        if (false === hash_equals($expectedMac, $mac)) {
-            echo 'Not valid MAC key'; die;
+        $expectedMac = substr(hash_hmac('sha256', $this->iv . $cipher, $this->macKey, true), 0, 10);
+        if (!hash_equals($mac, $expectedMac)) {
+            throw new \RuntimeException("Invalid MAC key.");
         }
 
-        $decryptedFile = openssl_decrypt($file, 'AES-256-CBC', $cipherKey, OPENSSL_RAW_DATA, $iv);
+        $this->decryptedData = openssl_decrypt(
+            $cipher,
+            'AES-256-CBC',
+            $this->cipherKey,
+            OPENSSL_RAW_DATA,
+            $this->iv
+        );
+    }
 
-//        $strPad = ord($dec[strlen($dec)-1]);
-//        $dec = substr($dec, 0, -$strPad);
+    /**
+     * @return string
+     */
+    public function __toString(): string
+    {
+        $this->rewind();
+        return $this->getContents();
+    }
 
-        file_put_contents('samples/results/IMAGE.original', $decryptedFile);
+    /**
+     * @return void
+     */
+    public function close(): void
+    {
+        $this->stream->close();
+    }
+
+    /**
+     * @return mixed
+     */
+    public function detach(): mixed
+    {
+        return $this->stream->detach();
+    }
+
+    /**
+     * @return int|null
+     */
+    public function getSize(): ?int
+    {
+        return !empty($this->decryptedData) ? strlen($this->decryptedData) : null;
+    }
+
+    /**
+     * @return int
+     */
+    public function tell(): int
+    {
+        return $this->position;
+    }
+
+    /**
+     * @return bool
+     */
+    public function eof(): bool
+    {
+        return $this->position >= strlen($this->decryptedData);
+    }
+
+    /**
+     * @return bool
+     */
+    public function isSeekable(): bool
+    {
+        return true;
+    }
+
+    /**
+     * @param $offset
+     * @param $whence
+     * @return void
+     */
+    public function seek($offset, $whence = SEEK_SET): void
+    {
+        $length = strlen($this->decryptedData);
+        match ($whence) {
+            SEEK_SET => $this->position = $offset,
+            SEEK_CUR => $this->position += $offset,
+            SEEK_END => $this->position = $length + $offset,
+            default => $this->position = $offset
+        };
+    }
+
+    /**
+     * @return void
+     */
+    public function rewind(): void
+    {
+        $this->position = 0;
+    }
+
+    /**
+     * @return bool
+     */
+    public function isWritable(): bool
+    {
+        return false;
+    }
+
+    /**
+     * @param string $string
+     * @return int
+     */
+    public function write(string $string): int
+    {
+        throw new \RuntimeException("Decrypted data is read only");
+    }
+
+    /**
+     * @return bool
+     */
+    public function isReadable(): bool
+    {
+        return true;
+    }
+
+    /**
+     * @param $length
+     * @return string
+     */
+    public function read($length): string
+    {
+        $chunk = substr($this->decryptedData, $this->position, $length);
+        $this->position += strlen($chunk);
+        return $chunk;
+    }
+
+    /**
+     * @return string
+     */
+    public function getContents(): string
+    {
+        $contents = substr($this->decryptedData, $this->position);
+        $this->position += strlen($contents);
+        return $contents;
+    }
+
+    /**
+     * @param $key
+     * @return array|null
+     */
+    public function getMetadata($key = null): array|null
+    {
+        return $this->stream->getMetadata($key);
+    }
+
+    /**
+     * Closes the stream when the destructed
+     */
+    public function __destruct()
+    {
+        $this->stream->close();
     }
 }
