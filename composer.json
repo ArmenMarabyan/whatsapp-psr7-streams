@@ -1,0 +1,24 @@
+{
+    "name": "armen/whatsapp-psr7-streams",
+    "description": "Psr-7 Decorators for WhatsApp style media decrypt-encrypt",
+    "type": "library",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Armen\\WhatsappPsr7Streams\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Armen",
+            "email": "armen.marabyan1@gmail.com"
+        }
+    ],
+    "require": {
+        "php": ">=7.4",
+        "guzzlehttp/psr7": "^2.7"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^5.2"
+    }
+}
