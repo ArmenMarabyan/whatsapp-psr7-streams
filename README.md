@@ -8,7 +8,7 @@
 composer require armen/whatsapp-psr7-streams
 ```
 
-## 🛠 Usage
+## Usage
 
 ```php
 
@@ -33,3 +33,8 @@ $dec = new Decrypt($enc, $mediaKey, MediaType::IMAGE->value);
 
 file_put_contents('samples/results/IMAGE.enc', $enc->getContents());
 file_put_contents('samples/results/IMAGE.original', $dec->getContents());
+```
+
+## TODO:
+
+[ ] Покрытие тестами

@@ -2,5 +2,5 @@ composer.lock
 phpstan.neon
 phpunit.xml
 vendor
-samples
 index.php
+.phpunit.result.cache
